@@ -71,17 +71,9 @@ export function MilestoneCard({
           </div>
         </div>
 
-        <button
-          className="ms-toggle"
-          type="button"
-          aria-expanded={open}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggle();
-          }}
-        >
+        <span className="ms-toggle" aria-hidden="true">
           <span className="chev">▶</span> {open ? "접기" : "더 보기"}
-        </button>
+        </span>
       </div>
     </div>
   );
