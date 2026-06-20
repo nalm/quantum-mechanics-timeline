@@ -18,9 +18,13 @@ export function Timeline({
     const root = rootRef.current;
     if (!root) return;
 
-    const targets = root.querySelectorAll<HTMLElement>(".ms");
+    const targets = Array.from(root.querySelectorAll<HTMLElement>(".ms"));
+    if (!targets.length) return;
+
+    const reveal = (el: Element) => el.classList.add("is-visible");
+
     if (!("IntersectionObserver" in window)) {
-      targets.forEach((t) => t.classList.add("is-visible"));
+      targets.forEach(reveal);
       return;
     }
 
@@ -28,16 +32,37 @@ export function Timeline({
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
+            reveal(entry.target);
             io.unobserve(entry.target);
           }
         }
       },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0.05 },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0 },
     );
 
     targets.forEach((t) => io.observe(t));
-    return () => io.disconnect();
+
+    // 안전망: 마운트 시점에 이미 뷰포트 안에 있는 카드는 즉시 노출한다.
+    // IntersectionObserver의 첫 비동기 콜백이 (React dev 이중 마운트나
+    // 웹폰트 지연 로드로 인한 레이아웃 시프트 등으로) 특정 카드를 놓치면
+    // 그 카드는 opacity:0 으로 영구히 숨겨지는데, 이 sweep이 이를 방지한다.
+    const sweep = () => {
+      const vh = window.innerHeight;
+      for (const t of targets) {
+        if (t.classList.contains("is-visible")) continue;
+        const r = t.getBoundingClientRect();
+        if (r.top < vh && r.bottom > 0) {
+          reveal(t);
+          io.unobserve(t);
+        }
+      }
+    };
+    const raf = requestAnimationFrame(sweep);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+    };
   }, []);
 
   return (
