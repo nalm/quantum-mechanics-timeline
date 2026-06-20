@@ -367,15 +367,23 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ── milestone card ── */
+/* 콘텐츠는 항상 보인다(opacity 기본 1). 진입 효과는 로드 시 1회 재생되는
+   transform 전용 애니메이션 — opacity 를 건드리지 않으므로 애니메이션이 재생되든
+   안 되든(미지원·reduced-motion·렌더러 정지 등) 카드는 절대 사라지지 않는다.
+   이전의 JS 노출 로직 / 스크롤 구동 애니메이션이 카드를 숨긴 채 남기던 문제를
+   구조적으로 제거한 설계다. */
 .ms {
   position: relative;
   margin-bottom: 16px;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity .6s ease, transform .6s ease, filter .25s ease;
   scroll-margin-top: 110px;
 }
-.ms.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .ms { animation: ms-in 0.5s ease both; }
+}
+@keyframes ms-in {
+  from { transform: translateY(14px); }
+  to   { transform: none; }
+}
 
 /* node dot on the spine */
 .ms::before {
@@ -401,7 +409,8 @@ a { color: inherit; text-decoration: none; }
   border-radius: 12px;
   padding: 16px 20px 14px;
   cursor: pointer;
-  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease,
+    opacity .25s ease, filter .25s ease;
 }
 .ms-card:hover {
   background: var(--cos-card-2);
@@ -495,8 +504,11 @@ a { color: inherit; text-decoration: none; }
 }
 .ms.is-open .ms-toggle .chev { transform: rotate(90deg); }
 
-/* search states */
-.ms.is-dim { opacity: 0.16; filter: grayscale(0.6); pointer-events: none; }
+/* search states — opacity·filter는 .ms 가 아니라 .ms-card 에 적용한다.
+   .ms 의 진입 애니메이션이 .ms 의 opacity 를 점유하므로(CSS 애니메이션 우선순위)
+   부모(.ms)에 dim 을 주면 무시된다. 자식(.ms-card)에 주면 자연스럽게 합성된다. */
+.ms.is-dim { pointer-events: none; }
+.ms.is-dim .ms-card { opacity: 0.16; filter: grayscale(0.6); }
 .ms.is-hit .ms-card { box-shadow: 0 0 0 2px color-mix(in srgb, var(--lane) 55%, transparent), var(--shadow); }
 
 /* ======================================================================
@@ -550,6 +562,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ms { opacity: 1 !important; transform: none !important; transition: none !important; }
+  /* 진입 애니메이션은 prefers-reduced-motion: no-preference 에서만 적용되므로
+     여기서는 별도 해제가 필요 없다(카드는 기본값 opacity:1 로 표시). */
   html { scroll-behavior: auto; }
 }
