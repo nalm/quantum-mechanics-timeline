@@ -18,50 +18,50 @@ export function Timeline({
     const root = rootRef.current;
     if (!root) return;
 
-    const targets = Array.from(root.querySelectorAll<HTMLElement>(".ms"));
-    if (!targets.length) return;
+    let remaining = Array.from(root.querySelectorAll<HTMLElement>(".ms"));
+    if (!remaining.length) return;
 
-    const reveal = (el: Element) => el.classList.add("is-visible");
+    // 스크롤 기반 self-healing 노출.
+    // 과거엔 IntersectionObserver의 비동기 콜백에만 의존했는데, 그 콜백이
+    // 특정 카드(특히 분야 첫 카드)를 놓치면 해당 카드가 뷰포트 안에 들어와도
+    // opacity:0 으로 영구히 숨겨졌다. 여기서는 마운트 직후와 매 스크롤마다
+    // 뷰포트 안(±margin)에 있는 카드를 직접 노출하므로, 한 번 화면에 들어온
+    // 카드는 절대 숨겨진 채로 남지 않는다.
+    let ticking = false;
 
-    if (!("IntersectionObserver" in window)) {
-      targets.forEach(reveal);
-      return;
-    }
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            reveal(entry.target);
-            io.unobserve(entry.target);
-          }
-        }
-      },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0 },
-    );
-
-    targets.forEach((t) => io.observe(t));
-
-    // 안전망: 마운트 시점에 이미 뷰포트 안에 있는 카드는 즉시 노출한다.
-    // IntersectionObserver의 첫 비동기 콜백이 (React dev 이중 마운트나
-    // 웹폰트 지연 로드로 인한 레이아웃 시프트 등으로) 특정 카드를 놓치면
-    // 그 카드는 opacity:0 으로 영구히 숨겨지는데, 이 sweep이 이를 방지한다.
     const sweep = () => {
+      ticking = false;
       const vh = window.innerHeight;
-      for (const t of targets) {
-        if (t.classList.contains("is-visible")) continue;
+      const next: HTMLElement[] = [];
+      for (const t of remaining) {
         const r = t.getBoundingClientRect();
-        if (r.top < vh && r.bottom > 0) {
-          reveal(t);
-          io.unobserve(t);
+        if (r.top < vh + 80 && r.bottom > -80) {
+          t.classList.add("is-visible");
+        } else {
+          next.push(t);
         }
       }
+      remaining = next;
+      if (!remaining.length) {
+        window.removeEventListener("scroll", onScroll);
+        window.removeEventListener("resize", onScroll);
+      }
     };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(sweep);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
     const raf = requestAnimationFrame(sweep);
 
     return () => {
       cancelAnimationFrame(raf);
-      io.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
     };
   }, []);
 
